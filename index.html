@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工时打卡 - 哈妮</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+    .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 20px; padding: 25px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    h1 { text-align: center; color: #333; margin-bottom: 10px; font-size: 22px; }
+    .date { text-align: center; color: #666; margin-bottom: 20px; font-size: 13px; }
+    .card { background: #f8f9fa; border-radius: 15px; padding: 20px; margin-bottom: 15px; }
+    .time-display { display: flex; justify-content: space-between; margin-bottom: 15px; }
+    .time-item { text-align: center; flex: 1; }
+    .time-label { font-size: 11px; color: #666; }
+    .time-value { font-size: 22px; font-weight: bold; color: #333; }
+    .status { text-align: center; padding: 12px; border-radius: 10px; margin-bottom: 15px; font-weight: bold; font-size: 14px; }
+    .status.good { background: #d4edda; color: #155724; }
+    .status.bad { background: #f8d7da; color: #721c24; }
+    .status.pending { background: #fff3cd; color: #856404; }
+    .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
+    .btn-checkin { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    .btn-checkout { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+    .btn-manual { background: #6c757d; color: white; }
+    .btn-month { background: #28a745; color: white; }
+    .btn-data { background: #17a2b8; color: white; }
+    .progress { background: #e9ecef; border-radius: 10px; height: 18px; overflow: hidden; margin-top: 10px; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); color: white; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+    .modal.show { display: flex; align-items: center; justify-content: center; }
+    .modal-content { background: white; border-radius: 15px; padding: 25px; max-width: 380px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .modal-title { font-size: 18px; margin-bottom: 15px; color: #333; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; margin-bottom: 5px; color: #666; font-size: 13px; }
+    .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+    .form-group textarea { height: 120px; font-family: monospace; }
+    .form-actions { display: flex; gap: 10px; margin-top: 15px; }
+    .form-actions button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; }
+    .btn-save { background: #28a745; color: white; }
+    .btn-cancel { background: #6c757d; color: white; }
+    .month-view { display: none; }
+    .month-view.show { display: block; }
+    .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 15px; }
+    .calendar-day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; font-size: 11px; background: #f8f9fa; padding: 2px; }
+    .calendar-day.good { background: #d4edda; color: #155724; }
+    .calendar-day.bad { background: #f8d7da; color: #721c24; }
+    .calendar-day.missing { background: #fff3cd; color: #856404; }
+    .calendar-header { font-weight: bold; color: #666; font-size: 10px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; }
+    .stat-item { text-align: center; padding: 10px; background: #f8f9fa; border-radius: 10px; }
+    .stat-value { font-size: 18px; font-weight: bold; color: #667eea; }
+    .stat-label { font-size: 10px; color: #666; margin-top: 3px; }
+    .back-btn { background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; margin-bottom: 15px; font-size: 14px; }
+    .data-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⏰ 工时打卡</h1>
+    <p class="date" id="currentDate"></p>
+    <div id="dayView">
+      <div class="card">
+        <div class="time-display">
+          <div class="time-item"><div class="time-label">上班</div><div class="time-value" id="checkInTime">--:--</div></div>
+          <div class="time-item"><div class="time-label">下班</div><div class="time-value" id="checkOutTime">--:--</div></div>
+        </div>
+        <div class="status pending" id="status">⏳ 等待打卡</div>
+        <div class="progress"><div class="progress-bar" id="progressBar" style="width:0%">0%</div></div>
+      </div>
+      <button class="btn btn-checkin" onclick="checkIn()">✅ 上班打卡</button>
+      <button class="btn btn-checkout" onclick="checkOut()">🏠 下班打卡</button>
+      <button class="btn btn-manual" onclick="showManualModal()">✏️ 手动补卡</button>
+      <button class="btn btn-month" onclick="showMonthView()">📊 月度统计</button>
+      <button class="btn btn-data" onclick="showDataModal()">💾 数据管理</button>
+    </div>
+    <div id="monthView" class="month-view">
+      <button class="back-btn" onclick="showDayView()">← 返回</button>
+      <h2 id="monthTitle"></h2>
+      <div class="stats">
+        <div class="stat-item"><div class="stat-value" id="totalHours">0</div><div class="stat-label">总工时</div></div>
+        <div class="stat-item"><div class="stat-value" id="goodDays">0</div><div class="stat-label">达标天数</div></div>
+        <div class="stat-item"><div class="stat-value" id="totalDays">0</div><div class="stat-label">总天数</div></div>
+      </div>
+      <div class="calendar" id="calendar"></div>
+    </div>
+  </div>
+  <div class="modal" id="manualModal">
+    <div class="modal-content">
+      <h3 class="modal-title">✏️ 手动补卡</h3>
+      <div class="form-group"><label>日期</label><input type="date" id="manualDate"></div>
+      <div class="form-group"><label>上班时间</label><input type="time" id="manualCheckIn"></div>
+      <div class="form-group"><label>下班时间</label><input type="time" id="manualCheckOut"></div>
+      <div class="form-actions">
+        <button class="btn-save" onclick="saveManual()">保存</button>
+        <button class="btn-cancel" onclick="hideManualModal()">取消</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="dataModal">
+    <div class="modal-content">
+      <h3 class="modal-title">💾 数据管理</h3>
+      <p style="font-size:12px;color:#666;margin-bottom:15px;">导出数据备份，或导入到其他设备</p>
+      <div class="data-buttons">
+        <button class="btn-save" onclick="exportData()">📤 导出数据</button>
+        <button class="btn-manual" onclick="document.getElementById('importFile').click()">📥 导入数据</button>
+      </div>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+      <div class="form-group" style="margin-top:15px;">
+        <label>当前数据预览：</label>
+        <textarea id="dataPreview" readonly></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="hideDataModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const TARGET_HOURS = 11.5, LUNCH_BREAK = 1.5;
+    function init() { updateDate(); loadTodayData(); }
+    function updateDate() { const now = new Date(); document.getElementById('currentDate').textContent = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }); }
+    function getTodayKey() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; }
+    function loadTodayData() { const today = getTodayKey(); const data = JSON.parse(localStorage.getItem('timeTracker')||'{}'); const t = data[today]||{}; document.getElementById('checkInTime').textContent = t.checkIn ? formatTime(t.checkIn) : '--:--'; document.getElementById('checkOutTime').textContent = t.checkOut ? formatTime(t.checkOut) : '--:--'; updateStatus(t.checkIn, t.checkOut); }
+    function formatTime(ts) { const d = new Date(ts); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+    function updateStatus(ci, co) { const s = document.getElementById('status'), p = document.getElementById('progressBar'); if (!ci) { s.textContent = '⏳ 等待打卡'; s.className = 'status pending'; p.style.width = '0%'; p.textContent = '0%'; return; } if (!co) { const h = calculateHours(ci, new Date()), pct = Math.min((h/TARGET_HOURS)*100, 100); p.style.width = pct+'%'; p.textContent = h.toFixed(1)+'h'; s.textContent = h>=TARGET_HOURS ? '✅ 今日达标！' : `⏰ 还差 ${(TARGET_HOURS-h).toFixed(1)}h`; s.className = h>=TARGET_HOURS ? 'status good' : 'status pending'; return; } const h = calculateHours(ci, co), pct = Math.min((h/TARGET_HOURS)*100, 100); p.style.width = pct+'%'; p.textContent = h.toFixed(1)+'h'; s.textContent = h>=TARGET_HOURS ? '✅ 今日达标！' : `❌ 不足 ${(TARGET_HOURS-h).toFixed(1)}h`; s.className = h>=TARGET_HOURS ? 'status good' : 'status bad'; }
+    function calculateHours(s, e) { return Math.max(0, (e-s)/(1000*60*60) - LUNCH_BREAK); }
+    function checkIn() { const today = getTodayKey(), data = JSON.parse(localStorage.getItem('timeTracker')||'{}'); if (!data[today]) data[today] = {}; data[today].checkIn = new Date().getTime(); localStorage.setItem('timeTracker', JSON.stringify(data)); loadTodayData(); alert('✅ 上班打卡成功！'); }
+    function checkOut() { const today = getTodayKey(), data = JSON.parse(localStorage.getItem('timeTracker')||'{}'); if (!data[today]) data[today] = {}; data[today].checkOut = new Date().getTime(); localStorage.setItem('timeTracker', JSON.stringify(data)); loadTodayData(); alert('✅ 下班打卡成功！\n今日工时：'+calculateHours(data[today].checkIn, data[today].checkOut).toFixed(1)+'h'); }
+    function showManualModal() { document.getElementById('manualDate').value = getTodayKey(); document.getElementById('manualModal').classList.add('show'); }
+    function hideManualModal() { document.getElementById('manualModal').classList.remove('show'); }
+    function saveManual() { const date = document.getElementById('manualDate').value, ci = document.getElementById('manualCheckIn').value, co = document.getElementById('manualCheckOut').value; if (!date) { alert('请选择日期！'); return; } const data = JSON.parse(localStorage.getItem('timeTracker')||'{}'); if (!data[date]) data[date] = {}; if (ci) { const [h,m] = ci.split(':'), d = new Date(date); d.setHours(+h,+m); data[date].checkIn = d.getTime(); } if (co) { const [h,m] = co.split(':'), d = new Date(date); d.setHours(+h,+m); data[date].checkOut = d.getTime(); } localStorage.setItem('timeTracker', JSON.stringify(data)); hideManualModal(); if (date===getTodayKey()) loadTodayData(); alert('✅ 保存成功！'); }
+    function showMonthView() { document.getElementById('dayView').style.display = 'none'; document.getElementById('monthView').classList.add('show'); const now = new Date(); document.getElementById('monthTitle').textContent = now.getFullYear()+'年'+(now.getMonth()+1)+'月'; renderCalendar(now.getFullYear(), now.getMonth()+1); renderStats(now.getFullYear(), now.getMonth()+1); }
+    function showDayView() { document.getElementById('dayView').style.display = 'block'; document.getElementById('monthView').classList.remove('show'); }
+    function renderCalendar(y, m) { const cal = document.getElementById('calendar'); cal.innerHTML = ''; ['日','一','二','三','四','五','六'].forEach(d => { const el = document.createElement('div'); el.className = 'calendar-day calendar-header'; el.textContent = d; cal.appendChild(el); }); const days = new Date(y, m, 0).getDate(), first = new Date(y, m-1, 1).getDay(); for (let i=0; i<first; i++) cal.appendChild(document.createElement('div')); const data = JSON.parse(localStorage.getItem('timeTracker')||'{}'); for (let d=1; d<=days; d++) { const key = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`, t = data[key]||{}, el = document.createElement('div'); el.className = 'calendar-day'; if (t.checkIn && t.checkOut) { const h = calculateHours(t.checkIn, t.checkOut); el.classList.add(h>=TARGET_HOURS?'good':'bad'); el.textContent = d+'\n'+h.toFixed(1)+'h'; } else if (t.checkIn||t.checkOut) { el.classList.add('missing'); el.textContent = d+'\n缺卡'; } else { el.textContent = d; } cal.appendChild(el); } }
+    function renderStats(y, m) { const data = JSON.parse(localStorage.getItem('timeTracker')||'{}'); let total=0, good=0, count=0; const days = new Date(y, m, 0).getDate(); for (let d=1; d<=days; d++) { const key = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`, t = data[key]||{}; if (t.checkIn && t.checkOut) { count++; const h = calculateHours(t.checkIn, t.checkOut); total += h; if (h>=TARGET_HOURS) good++; } } document.getElementById('totalHours').textContent = total.toFixed(1); document.getElementById('goodDays').textContent = good; document.getElementById('totalDays').textContent = count; }
+    function showDataModal() { document.getElementById('dataPreview').value = JSON.stringify(JSON.parse(localStorage.getItem('timeTracker')||'{}'), null, 2); document.getElementById('dataModal').classList.add('show'); }
+    function hideDataModal() { document.getElementById('dataModal').classList.remove('show'); }
+    function exportData() { const data = localStorage.getItem('timeTracker')||'{}', blob = new Blob([data], {type:'application/json'}), url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = `工时数据_${getTodayKey()}.json`; a.click(); URL.revokeObjectURL(url); alert('✅ 数据已导出！'); }
+    function importData(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(ev) { try { const data = JSON.parse(ev.target.result); localStorage.setItem('timeTracker', JSON.stringify(data)); loadTodayData(); alert('✅ 数据已导入！'); hideDataModal(); } catch(err) { alert('❌ 数据格式错误！'); } }; reader.readAsText(file); }
+    init();
+  </script>
+</body>
+</html>
